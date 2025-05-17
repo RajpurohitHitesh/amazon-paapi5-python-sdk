@@ -1,7 +1,9 @@
 # Amazon PA-API 5.0 Python SDK
 
+[![PyPI](https://img.shields.io/pypi/v/amazon-paapi5-python-sdk?color=%231182C2&label=PyPI)](https://pypi.org/project/amazon-paapi5-python-sdk/)
 [![Python](https://img.shields.io/badge/Python->3.9-%23FFD140)](https://www.python.org/)
 [![Amazon API](https://img.shields.io/badge/Amazon%20API-5.0-%23FD9B15)](https://webservices.amazon.com/paapi5/documentation/)
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/amazon-paapi5-python-sdk?label=Installs)](https://pypi.org/project/amazon-paapi5-python-sdk/)
 ![Static Badge](https://img.shields.io/badge/License-Apache_2.0-blue)
 [![Bugs](https://sonarcloud.io/api/project_badges/measure?project=RajpurohitHitesh_amazon-paapi5-python-sdk&metric=bugs)](https://sonarcloud.io/summary/new_code?id=RajpurohitHitesh_amazon-paapi5-python-sdk)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=RajpurohitHitesh_amazon-paapi5-python-sdk&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=RajpurohitHitesh_amazon-paapi5-python-sdk)
