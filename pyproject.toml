@@ -6,7 +6,7 @@ authors = ["Hitesh Singh Rajpurohit"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">= 3.9"
 requests = "^2.31.0"
 aiohttp = "^3.9.3"
 cachetools = "^5.3.3"
