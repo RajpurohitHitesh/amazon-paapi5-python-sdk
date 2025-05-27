@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="amazon-paapi5-python-sdk",
-    version="1.0.2",
+    version="1.0.1",
     description="Amazon Product Advertising API v5 Python SDK (Most Advance SDK)",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
