@@ -68,12 +68,7 @@ class Client:
             max_retries=getattr(config, 'max_retries', 3)
         )
         
-        self.cache = custom_cache or Cache(
-            ttl=getattr(config, 'cache_ttl', 3600),
-            use_redis=getattr(config, 'use_redis', False),
-            redis_url=getattr(config, 'redis_url', "redis://localhost:6379"),
-            namespace=f"amazon_paapi5:{config.marketplace}"
-        )
+        self.cache = custom_cache or Cache(**config.get_cache_config())
         
         # Get decrypted credentials for signature
         credentials = (
@@ -99,21 +94,8 @@ class Client:
             f"Initialized Amazon PAAPI client for marketplace: {config.marketplace}"
         )
 
-    @measure_performance(monitor=performance_monitor)
-    def _make_request(self, endpoint: str, payload: dict) -> dict:
-        """
-        Make a synchronous API request with enhanced error handling and monitoring.
-        
-        Args:
-            endpoint: API endpoint
-            payload: Request payload
-            
-        Returns:
-            dict: API response
-            
-        Raises:
-            Various exceptions based on error conditions
-        """
+    def _log_request(self, endpoint: str, payload: dict) -> None:
+        """Log request details."""
         self._request_count += 1
         self.logger.debug(
             f"Making request to {endpoint}",
@@ -123,12 +105,27 @@ class Client:
                 'request_number': self._request_count
             }
         )
-        
+
+    def _log_response(self, endpoint: str, status_code: int, response_time: float) -> None:
+        """Log response details."""
+        self.logger.debug(
+            f"Received response from {endpoint}",
+            extra={
+                'endpoint': endpoint,
+                'status_code': status_code,
+                'response_time': response_time,
+                'cache_stats': self.cache.get_stats()
+            }
+        )
+
+    @measure_performance(monitor=performance_monitor)
+    def _make_request(self, endpoint: str, payload: dict) -> dict:
+        """Make a synchronous API request with enhanced error handling."""
+        self._log_request(endpoint, payload)
         start_time = time.time()
         
         try:
             validate_resources(endpoint, payload.get('Resources', []))
-            
             authorization = self.signature.generate(
                 'POST',
                 self.config.host,
@@ -148,21 +145,12 @@ class Client:
                 f"{self.base_url}/{endpoint}",
                 json=payload,
                 headers=headers,
-                timeout=30  # 30 seconds timeout
+                timeout=30
             )
             
             execution_time = time.time() - start_time
             performance_monitor.record_api_request(endpoint, execution_time, response.status_code)
-            
-            self.logger.debug(
-                f"Received response from {endpoint}",
-                extra={
-                    'endpoint': endpoint,
-                    'status_code': response.status_code,
-                    'response_time': execution_time,
-                    'cache_stats': self.cache.get_stats()
-                }
-            )
+            self._log_response(endpoint, response.status_code, execution_time)
             
             if response.status_code != 200:
                 error_response = response.json() if response.content else {}
@@ -185,15 +173,14 @@ class Client:
                         message=error_response.get('message', 'Invalid parameters'),
                         response_errors=error_response.get('errors')
                     )
-                else:
-                    raise AmazonAPIException(
-                        message=f"Request failed with status {response.status_code}",
-                        response_errors=error_response.get('errors')
-                    )
+                raise AmazonAPIException(
+                    message=f"Request failed with status {response.status_code}",
+                    response_errors=error_response.get('errors')
+                )
             
             return response.json()
             
-        except (requests.RequestException, aiohttp.ClientError) as e:
+        except requests.RequestException as e:
             self.logger.error(f"Network error: {str(e)}", exc_info=True)
             raise NetworkException(str(e), original_error=e)
         except Exception as e:
@@ -202,20 +189,8 @@ class Client:
 
     @measure_performance(monitor=performance_monitor)
     async def _make_async_request(self, endpoint: str, payload: dict) -> dict:
-        """
-        Make an asynchronous API request with enhanced error handling and monitoring.
-        
-        Args:
-            endpoint: API endpoint
-            payload: Request payload
-            
-        Returns:
-            dict: API response
-            
-        Raises:
-            Various exceptions based on error conditions
-        """
-        self._request_count += 1
+        """Make an asynchronous API request with enhanced error handling."""
+        self._log_request(endpoint, payload)
         start_time = time.time()
         
         if self.async_session is None:
@@ -223,7 +198,6 @@ class Client:
         
         try:
             validate_resources(endpoint, payload.get('Resources', []))
-            
             authorization = self.signature.generate(
                 'POST',
                 self.config.host,
@@ -247,6 +221,7 @@ class Client:
             ) as response:
                 execution_time = time.time() - start_time
                 performance_monitor.record_api_request(endpoint, execution_time, response.status)
+                self._log_response(endpoint, response.status, execution_time)
                 
                 if response.status != 200:
                     error_response = await response.json() if response.content else {}
@@ -269,11 +244,10 @@ class Client:
                             message=error_response.get('message', 'Invalid parameters'),
                             response_errors=error_response.get('errors')
                         )
-                    else:
-                        raise AmazonAPIException(
-                            message=f"Async request failed with status {response.status}",
-                            response_errors=error_response.get('errors')
-                        )
+                    raise AmazonAPIException(
+                        message=f"Request failed with status {response.status}",
+                        response_errors=error_response.get('errors')
+                    )
                 
                 return await response.json()
                 
@@ -285,25 +259,18 @@ class Client:
             raise
 
     async def __aenter__(self):
-        """Support async context manager for proper session cleanup."""
+        """Support async context manager."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Close async session on context manager exit."""
+        """Close async session on exit."""
         if self.async_session:
             await self.async_session.close()
 
+    # All the API methods with @measure_performance decorator
     @measure_performance(monitor=performance_monitor)
     def search_items(self, request: SearchItemsRequest) -> SearchItemsResponse:
-        """
-        Search for products by keywords and category.
-        
-        Args:
-            request: SearchItemsRequest object
-            
-        Returns:
-            SearchItemsResponse object
-        """
+        """Search for products by keywords and category."""
         cache_key = f"search_items_{request.keywords}_{request.search_index}"
         cached_response = self.cache.get(cache_key)
         if cached_response:
@@ -421,214 +388,4 @@ class Client:
             'cache_stats': self.cache.get_stats(),
             'performance_metrics': performance_monitor.get_metrics(),
             'performance_summary': performance_monitor.get_performance_summary()
-        }
-
-        class Client:
-    def __init__(self, 
-                 config: Config,
-                 custom_cache: Optional[Cache] = None,
-                 logger: Optional[logging.Logger] = None):
-        """
-        Initialize Amazon PA-API client.
-        
-        Args:
-            config: Configuration object
-            custom_cache: Optional custom cache implementation
-            logger: Optional logger instance
-        """
-        self.config = config
-        self.logger = logger or logging.getLogger(__name__)
-        self._initialize_time = datetime.utcnow().isoformat()
-        self._request_count = 0
-        
-        # Initialize credential manager if encryption key is provided
-        self.credential_manager = None
-        if config.encryption_key:
-            try:
-                self.credential_manager = CredentialManager(config.encryption_key)
-                encrypted_credentials = self.credential_manager.encrypt_credentials({
-                    'access_key': config.access_key,
-                    'secret_key': config.secret_key
-                })
-                config.access_key = encrypted_credentials['access_key']
-                config.secret_key = encrypted_credentials['secret_key']
-            except Exception as e:
-                self.logger.error(f"Failed to initialize credential encryption: {str(e)}")
-                raise
-        
-        # Initialize components
-        self.throttler = Throttler(delay=config.throttle_delay)
-        self.cache = custom_cache or Cache(**config.get_cache_config())
-        
-        # Get decrypted credentials for signature
-        credentials = (
-            self.credential_manager.decrypt_credentials({
-                'access_key': config.access_key,
-                'secret_key': config.secret_key
-            })
-            if self.credential_manager
-            else {'access_key': config.access_key, 'secret_key': config.secret_key}
-        )
-        
-        self.signature = Signature(
-            credentials['access_key'],
-            credentials['secret_key'],
-            config.region
-        )
-        
-        self.base_url = f"https://{config.host}/paapi5"
-        self.session = requests.Session()
-        self.async_session = None
-
-    def _log_request(self, endpoint: str, payload: dict) -> None:
-        """Log request details."""
-        self._request_count += 1
-        self.logger.debug(
-            f"Making request to {endpoint}",
-            extra={
-                'endpoint': endpoint,
-                'marketplace': self.config.marketplace,
-                'request_number': self._request_count
-            }
-        )
-
-    def _log_response(self, endpoint: str, status_code: int, response_time: float) -> None:
-        """Log response details."""
-        self.logger.debug(
-            f"Received response from {endpoint}",
-            extra={
-                'endpoint': endpoint,
-                'status_code': status_code,
-                'response_time': response_time,
-                'cache_stats': self.cache.get_stats()
-            }
-        )
-
-    def _make_request(self, endpoint: str, payload: dict) -> dict:
-        """Make a synchronous API request with enhanced error handling."""
-        self._log_request(endpoint, payload)
-        start_time = time.time()
-        
-        try:
-            validate_resources(endpoint, payload.get('Resources', []))
-            authorization = self.signature.generate(
-                'POST',
-                self.config.host,
-                f"/paapi5/{endpoint}",
-                payload
-            )
-            
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": authorization,
-                "x-amz-date": datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
-                "Accept-Encoding": "gzip",
-            }
-            
-            response = self.session.post(
-                f"{self.base_url}/{endpoint}",
-                json=payload,
-                headers=headers,
-                timeout=30
-            )
-            
-            execution_time = time.time() - start_time
-            self._log_response(endpoint, response.status_code, execution_time)
-            
-            if response.status_code != 200:
-                error_response = response.json() if response.content else {}
-                if response.status_code == 401:
-                    raise AuthenticationException(
-                        error_response.get('message', 'Authentication failed')
-                    )
-                elif response.status_code == 429:
-                    raise ThrottleException(
-                        error_response.get('message', 'Rate limit exceeded')
-                    )
-                elif response.status_code == 400:
-                    raise InvalidParameterException(
-                        error_response.get('message', 'Invalid parameters')
-                    )
-                raise AmazonAPIException(
-                    f"Request failed with status {response.status_code}"
-                )
-            
-            return response.json()
-            
-        except requests.RequestException as e:
-            self.logger.error(f"Request failed: {str(e)}", exc_info=True)
-            raise NetworkException(str(e))
-
-    async def _make_async_request(self, endpoint: str, payload: dict) -> dict:
-        """Make an asynchronous API request with enhanced error handling."""
-        self._log_request(endpoint, payload)
-        start_time = time.time()
-        
-        if self.async_session is None:
-            self.async_session = aiohttp.ClientSession()
-        
-        try:
-            validate_resources(endpoint, payload.get('Resources', []))
-            authorization = self.signature.generate(
-                'POST',
-                self.config.host,
-                f"/paapi5/{endpoint}",
-                payload
-            )
-            
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": authorization,
-                "x-amz-date": datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
-                "Accept-Encoding": "gzip",
-            }
-            
-            async with self.async_session.post(
-                f"{self.base_url}/{endpoint}",
-                json=payload,
-                headers=headers,
-                timeout=30
-            ) as response:
-                execution_time = time.time() - start_time
-                self._log_response(endpoint, response.status, execution_time)
-                
-                if response.status != 200:
-                    error_response = await response.json() if response.content else {}
-                    if response.status == 401:
-                        raise AuthenticationException(
-                            error_response.get('message', 'Authentication failed')
-                        )
-                    elif response.status == 429:
-                        raise ThrottleException(
-                            error_response.get('message', 'Rate limit exceeded')
-                        )
-                    elif response.status == 400:
-                        raise InvalidParameterException(
-                            error_response.get('message', 'Invalid parameters')
-                        )
-                    raise AmazonAPIException(
-                        f"Request failed with status {response.status}"
-                    )
-                
-                return await response.json()
-                
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            self.logger.error(f"Async request failed: {str(e)}", exc_info=True)
-            raise NetworkException(str(e))
-
-    async def __aenter__(self):
-        """Support async context manager."""
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Close async session on exit."""
-        if self.async_session:
-            await self.async_session.close()
-
-    def get_metrics(self) -> Dict:
-        """Get performance metrics."""
-        return {
-            'initialization_time': self._initialize_time,
-            'total_requests': self._request_count,
-            'cache_stats': self.cache.get_stats()
         }
