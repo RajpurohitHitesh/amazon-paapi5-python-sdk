@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="amazon-paapi5-python-sdk",
-    version="1.0.0",
+    version="1.0.1",
     description="Amazon Product Advertising API v5 Python SDK (Most Advance SDK)",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
@@ -14,6 +14,7 @@ setup(
         "requests>=2.28.0",
         "aiohttp>=3.8.0",
         "cachetools>=5.0.0",
+        "cryptography>=3.4.8",
     ],
     extras_require={
         "redis": ["redis>=4.0.0"],
