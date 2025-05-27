@@ -22,7 +22,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.8'  # Matches your SDK’s minimum requirement
+          python-version: '3.11'  # Matches your SDK’s minimum requirement
 
       - name: Install dependencies
         run: |
