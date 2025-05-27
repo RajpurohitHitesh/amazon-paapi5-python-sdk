@@ -26,18 +26,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build setuptools wheel
+          pip install build twine
       
       - name: Build package
-        run: |
-          # Verify the project structure
-          ls -la
-          ls -la src/
-          # Build the package
-          python -m build
+        run: python -m build
       
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          user: __token__
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist/
