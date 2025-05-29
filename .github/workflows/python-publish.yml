@@ -14,7 +14,7 @@ permissions:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    environment: pypi  # Optional, for environment protection
+    environment: release  # Optional, for environment protection
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
