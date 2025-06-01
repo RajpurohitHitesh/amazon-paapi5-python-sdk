@@ -1,0 +1,36 @@
+name: Python Package using Conda
+
+on: [push]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.11'
+    - name: Add conda to system path
+      run: |
+        # $CONDA is an environment variable pointing to the root of the miniconda directory
+        echo $CONDA/bin >> $GITHUB_PATH
+    - name: Create conda environment
+      run: |
+        conda env create -f environment.yml -n amazon-paapi5-python-sdk
+    - name: Activate conda environment
+      run: |
+        source $CONDA/bin/activate amazon-paapi5-python-sdk
+    - name: Lint with flake8
+      run: |
+        source $CONDA/bin/activate amazon-paapi5-python-sdk
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Test with pytest
+      run: |
+        source $CONDA/bin/activate amazon-paapi5-python-sdk
+        export PYTHONPATH=$PYTHONPATH:$GITHUB_WORKSPACE/src
+        pytest tests/
