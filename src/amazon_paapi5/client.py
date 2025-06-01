@@ -107,285 +107,557 @@ class Client:
         )
 
     def _log_response(self, endpoint: str, status_code: int, response_time: float) -> None:
-        """Log response details."""
+        """Log response details and update performance metrics."""
         self.logger.debug(
-            f"Received response from {endpoint}",
+            f"Received response from {endpoint} with status {status_code} in {response_time:.2f}s",
             extra={
                 'endpoint': endpoint,
                 'status_code': status_code,
                 'response_time': response_time,
-                'cache_stats': self.cache.get_stats()
+                'marketplace': self.config.marketplace
             }
         )
+        
+        # Update performance metrics if monitoring is enabled
+        if hasattr(self, 'performance_monitor'):
+            self.performance_monitor.record_api_request(
+                endpoint=endpoint,
+                response_time=response_time,
+                status_code=status_code
+            )
 
     @measure_performance(monitor=performance_monitor)
-    def _make_request(self, endpoint: str, payload: dict) -> dict:
-        """Make a synchronous API request with enhanced error handling."""
-        self._log_request(endpoint, payload)
-        start_time = time.time()
+    def search_items(self, request: SearchItemsRequest) -> SearchItemsResponse:
+        """Search items by keywords."""
+        endpoint = f"{self.base_url}/searchitems"
+        payload = request.to_dict()
         
-        try:
-            validate_resources(endpoint, payload.get('Resources', []))
-            authorization = self.signature.generate(
-                'POST',
-                self.config.host,
-                f"/paapi5/{endpoint}",
-                payload
-            )
+        # Check cache first
+        cache_key = f"search_items:{hash(frozenset(payload.items()))}"
+        cached_response = self.cache.get(cache_key)
+        if cached_response:
+            self.logger.debug("Using cached response for SearchItems")
+            return cached_response
+        
+        # Make API call
+        self._log_request(endpoint, payload)
+        with self.throttler:
+            start_time = time.time()
             
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": authorization,
-                "x-amz-date": datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
+                "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": f"AmazonPAAPI5-Python-SDK/1.0.0 (Language=Python/{'.'.join(map(str, __import__('sys').version_info[:3]))})"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
             }
             
-            response = self.session.post(
-                f"{self.base_url}/{endpoint}",
-                json=payload,
-                headers=headers,
-                timeout=30
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
             )
             
-            execution_time = time.time() - start_time
-            performance_monitor.record_api_request(endpoint, execution_time, response.status_code)
-            self._log_response(endpoint, response.status_code, execution_time)
+            response = self.session.post(
+                endpoint, 
+                headers=signed_headers,
+                json=payload
+            )
             
-            if response.status_code != 200:
-                error_response = response.json() if response.content else {}
-                if response.status_code == 401:
-                    raise AuthenticationException(
-                        message=error_response.get('message', 'Authentication failed'),
-                        response_errors=error_response.get('errors')
-                    )
-                elif response.status_code == 429:
-                    retry_after = response.headers.get('Retry-After')
-                    exception = ThrottleException(
-                        message=error_response.get('message', 'Rate limit exceeded'),
-                        response_errors=error_response.get('errors')
-                    )
-                    if retry_after:
-                        exception.set_retry_after(int(retry_after))
-                    raise exception
-                elif response.status_code == 400:
-                    raise InvalidParameterException(
-                        message=error_response.get('message', 'Invalid parameters'),
-                        response_errors=error_response.get('errors')
-                    )
-                raise AmazonAPIException(
-                    message=f"Request failed with status {response.status_code}",
-                    response_errors=error_response.get('errors')
-                )
+            response_time = time.time() - start_time
+            self._log_response(endpoint, response.status_code, response_time)
             
-            return response.json()
+        # Handle response
+        if response.status_code != 200:
+            self._handle_error_response(response)
             
-        except requests.RequestException as e:
-            self.logger.error(f"Network error: {str(e)}", exc_info=True)
-            raise NetworkException(str(e), original_error=e)
-        except Exception as e:
-            self.logger.error(f"Request failed: {str(e)}", exc_info=True)
-            raise
-
-    @measure_performance(monitor=performance_monitor)
-    async def _make_async_request(self, endpoint: str, payload: dict) -> dict:
-        """Make an asynchronous API request with enhanced error handling."""
-        self._log_request(endpoint, payload)
-        start_time = time.time()
+        data = response.json()
+        search_response = SearchItemsResponse.from_dict(data)
         
+        # Cache response
+        self.cache.set(cache_key, search_response)
+        
+        return search_response
+    
+    async def search_items_async(self, request: SearchItemsRequest) -> SearchItemsResponse:
+        """Search items by keywords asynchronously."""
+        endpoint = f"{self.base_url}/searchitems"
+        payload = request.to_dict()
+        
+        # Check cache first
+        cache_key = f"search_items:{hash(frozenset(payload.items()))}"
+        cached_response = self.cache.get(cache_key)
+        if cached_response:
+            self.logger.debug("Using cached response for SearchItems (async)")
+            return cached_response
+        
+        # Create session if needed
         if self.async_session is None:
             self.async_session = aiohttp.ClientSession()
         
-        try:
-            validate_resources(endpoint, payload.get('Resources', []))
-            authorization = self.signature.generate(
-                'POST',
-                self.config.host,
-                f"/paapi5/{endpoint}",
-                payload
-            )
+        # Make API call
+        self._log_request(endpoint, payload)
+        async with self.throttler:
+            start_time = time.time()
             
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": authorization,
-                "x-amz-date": datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
+                "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": f"AmazonPAAPI5-Python-SDK/1.0.0 (Async)"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
             }
             
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
+            )
+            
             async with self.async_session.post(
-                f"{self.base_url}/{endpoint}",
-                json=payload,
-                headers=headers,
-                timeout=30
+                endpoint, 
+                headers=signed_headers,
+                json=payload
             ) as response:
-                execution_time = time.time() - start_time
-                performance_monitor.record_api_request(endpoint, execution_time, response.status)
-                self._log_response(endpoint, response.status, execution_time)
+                response_time = time.time() - start_time
+                self._log_response(endpoint, response.status, response_time)
                 
+                # Handle response
                 if response.status != 200:
-                    error_response = await response.json() if response.content else {}
-                    if response.status == 401:
-                        raise AuthenticationException(
-                            message=error_response.get('message', 'Authentication failed'),
-                            response_errors=error_response.get('errors')
-                        )
-                    elif response.status == 429:
-                        retry_after = response.headers.get('Retry-After')
-                        exception = ThrottleException(
-                            message=error_response.get('message', 'Rate limit exceeded'),
-                            response_errors=error_response.get('errors')
-                        )
-                        if retry_after:
-                            exception.set_retry_after(int(retry_after))
-                        raise exception
-                    elif response.status == 400:
-                        raise InvalidParameterException(
-                            message=error_response.get('message', 'Invalid parameters'),
-                            response_errors=error_response.get('errors')
-                        )
-                    raise AmazonAPIException(
-                        message=f"Request failed with status {response.status}",
-                        response_errors=error_response.get('errors')
-                    )
+                    text = await response.text()
+                    self._handle_error_response_async(response.status, text)
                 
-                return await response.json()
+                data = await response.json()
+                search_response = SearchItemsResponse.from_dict(data)
                 
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            self.logger.error(f"Async network error: {str(e)}", exc_info=True)
-            raise NetworkException(str(e), original_error=e)
-        except Exception as e:
-            self.logger.error(f"Async request failed: {str(e)}", exc_info=True)
-            raise
-
-    async def __aenter__(self):
-        """Support async context manager."""
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Close async session on exit."""
-        if self.async_session:
-            await self.async_session.close()
-
-    # All the API methods with @measure_performance decorator
-    @measure_performance(monitor=performance_monitor)
-    def search_items(self, request: SearchItemsRequest) -> SearchItemsResponse:
-        """Search for products by keywords and category."""
-        cache_key = f"search_items_{request.keywords}_{request.search_index}"
-        cached_response = self.cache.get(cache_key)
-        if cached_response:
-            return SearchItemsResponse.from_dict(cached_response)
-
-        with self.throttler:
-            payload = request.to_dict()
-            response = self._make_request("searchitems", payload)
-            self.cache.set(cache_key, response)
-            return SearchItemsResponse.from_dict(response)
-
-    @measure_performance(monitor=performance_monitor)
-    async def search_items_async(self, request: SearchItemsRequest) -> SearchItemsResponse:
-        """Asynchronous version of search_items."""
-        cache_key = f"search_items_{request.keywords}_{request.search_index}"
-        cached_response = self.cache.get(cache_key)
-        if cached_response:
-            return SearchItemsResponse.from_dict(cached_response)
-
-        async with self.throttler:
-            payload = request.to_dict()
-            response = await self._make_async_request("searchitems", payload)
-            self.cache.set(cache_key, response)
-            return SearchItemsResponse.from_dict(response)
-
+                # Cache response
+                self.cache.set(cache_key, search_response)
+                
+                return search_response
+    
     @measure_performance(monitor=performance_monitor)
     def get_items(self, request: GetItemsRequest) -> GetItemsResponse:
-        """Fetch details for specific ASINs (up to 10)."""
-        cache_key = f"get_items_{'_'.join(request.item_ids)}"
+        """Get items by ASINs."""
+        endpoint = f"{self.base_url}/getitems"
+        payload = request.to_dict()
+        
+        # Check cache first
+        cache_key = f"get_items:{hash(frozenset(payload.items()))}"
         cached_response = self.cache.get(cache_key)
         if cached_response:
-            return GetItemsResponse.from_dict(cached_response)
-
+            self.logger.debug("Using cached response for GetItems")
+            return cached_response
+        
+        # Make API call
+        self._log_request(endpoint, payload)
         with self.throttler:
-            payload = request.to_dict()
-            response = self._make_request("getitems", payload)
-            self.cache.set(cache_key, response)
-            return GetItemsResponse.from_dict(response)
-
-    @measure_performance(monitor=performance_monitor)
+            start_time = time.time()
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
+            }
+            
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
+            )
+            
+            response = self.session.post(
+                endpoint, 
+                headers=signed_headers,
+                json=payload
+            )
+            
+            response_time = time.time() - start_time
+            self._log_response(endpoint, response.status_code, response_time)
+            
+        # Handle response
+        if response.status_code != 200:
+            self._handle_error_response(response)
+            
+        data = response.json()
+        items_response = GetItemsResponse.from_dict(data)
+        
+        # Cache response
+        self.cache.set(cache_key, items_response)
+        
+        return items_response
+    
     async def get_items_async(self, request: GetItemsRequest) -> GetItemsResponse:
-        """Asynchronous version of get_items."""
-        cache_key = f"get_items_{'_'.join(request.item_ids)}"
+        """Get items by ASINs asynchronously."""
+        endpoint = f"{self.base_url}/getitems"
+        payload = request.to_dict()
+        
+        # Check cache first
+        cache_key = f"get_items:{hash(frozenset(payload.items()))}"
         cached_response = self.cache.get(cache_key)
         if cached_response:
-            return GetItemsResponse.from_dict(cached_response)
-
+            self.logger.debug("Using cached response for GetItems (async)")
+            return cached_response
+        
+        # Create session if needed
+        if self.async_session is None:
+            self.async_session = aiohttp.ClientSession()
+        
+        # Make API call
+        self._log_request(endpoint, payload)
         async with self.throttler:
-            payload = request.to_dict()
-            response = await self._make_async_request("getitems", payload)
-            self.cache.set(cache_key, response)
-            return GetItemsResponse.from_dict(response)
-
+            start_time = time.time()
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
+            }
+            
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
+            )
+            
+            async with self.async_session.post(
+                endpoint, 
+                headers=signed_headers,
+                json=payload
+            ) as response:
+                response_time = time.time() - start_time
+                self._log_response(endpoint, response.status, response_time)
+                
+                # Handle response
+                if response.status != 200:
+                    text = await response.text()
+                    self._handle_error_response_async(response.status, text)
+                
+                data = await response.json()
+                items_response = GetItemsResponse.from_dict(data)
+                
+                # Cache response
+                self.cache.set(cache_key, items_response)
+                
+                return items_response
+    
     @measure_performance(monitor=performance_monitor)
     def get_variations(self, request: GetVariationsRequest) -> GetVariationsResponse:
-        """Fetch variations for a specific ASIN."""
-        cache_key = f"get_variations_{request.asin}_{request.variation_page}"
+        """Get variations for an ASIN."""
+        endpoint = f"{self.base_url}/getvariations"
+        payload = request.to_dict()
+        
+        # Check cache first
+        cache_key = f"get_variations:{hash(frozenset(payload.items()))}"
         cached_response = self.cache.get(cache_key)
         if cached_response:
-            return GetVariationsResponse.from_dict(cached_response)
-
+            self.logger.debug("Using cached response for GetVariations")
+            return cached_response
+        
+        # Make API call
+        self._log_request(endpoint, payload)
         with self.throttler:
-            payload = request.to_dict()
-            response = self._make_request("getvariations", payload)
-            self.cache.set(cache_key, response)
-            return GetVariationsResponse.from_dict(response)
-
-    @measure_performance(monitor=performance_monitor)
+            start_time = time.time()
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
+            }
+            
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
+            )
+            
+            response = self.session.post(
+                endpoint, 
+                headers=signed_headers,
+                json=payload
+            )
+            
+            response_time = time.time() - start_time
+            self._log_response(endpoint, response.status_code, response_time)
+            
+        # Handle response
+        if response.status_code != 200:
+            self._handle_error_response(response)
+            
+        data = response.json()
+        variations_response = GetVariationsResponse.from_dict(data)
+        
+        # Cache response
+        self.cache.set(cache_key, variations_response)
+        
+        return variations_response
+    
     async def get_variations_async(self, request: GetVariationsRequest) -> GetVariationsResponse:
-        """Asynchronous version of get_variations."""
-        cache_key = f"get_variations_{request.asin}_{request.variation_page}"
+        """Get variations for an ASIN asynchronously."""
+        endpoint = f"{self.base_url}/getvariations"
+        payload = request.to_dict()
+        
+        # Check cache first
+        cache_key = f"get_variations:{hash(frozenset(payload.items()))}"
         cached_response = self.cache.get(cache_key)
         if cached_response:
-            return GetVariationsResponse.from_dict(cached_response)
-
+            self.logger.debug("Using cached response for GetVariations (async)")
+            return cached_response
+        
+        # Create session if needed
+        if self.async_session is None:
+            self.async_session = aiohttp.ClientSession()
+        
+        # Make API call
+        self._log_request(endpoint, payload)
         async with self.throttler:
-            payload = request.to_dict()
-            response = await self._make_async_request("getvariations", payload)
-            self.cache.set(cache_key, response)
-            return GetVariationsResponse.from_dict(response)
-
+            start_time = time.time()
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
+            }
+            
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
+            )
+            
+            async with self.async_session.post(
+                endpoint, 
+                headers=signed_headers,
+                json=payload
+            ) as response:
+                response_time = time.time() - start_time
+                self._log_response(endpoint, response.status, response_time)
+                
+                # Handle response
+                if response.status != 200:
+                    text = await response.text()
+                    self._handle_error_response_async(response.status, text)
+                
+                data = await response.json()
+                variations_response = GetVariationsResponse.from_dict(data)
+                
+                # Cache response
+                self.cache.set(cache_key, variations_response)
+                
+                return variations_response
+    
     @measure_performance(monitor=performance_monitor)
     def get_browse_nodes(self, request: GetBrowseNodesRequest) -> GetBrowseNodesResponse:
-        """Fetch details for specific browse node IDs."""
-        cache_key = f"get_browse_nodes_{'_'.join(request.browse_node_ids)}"
+        """Get browse nodes by IDs."""
+        endpoint = f"{self.base_url}/getbrowsenodes"
+        payload = request.to_dict()
+        
+        # Check cache first
+        cache_key = f"get_browse_nodes:{hash(frozenset(payload.items()))}"
         cached_response = self.cache.get(cache_key)
         if cached_response:
-            return GetBrowseNodesResponse.from_dict(cached_response)
-
+            self.logger.debug("Using cached response for GetBrowseNodes")
+            return cached_response
+        
+        # Make API call
+        self._log_request(endpoint, payload)
         with self.throttler:
-            payload = request.to_dict()
-            response = self._make_request("getbrowsenodes", payload)
-            self.cache.set(cache_key, response)
-            return GetBrowseNodesResponse.from_dict(response)
-
-    @measure_performance(monitor=performance_monitor)
+            start_time = time.time()
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
+            }
+            
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
+            )
+            
+            response = self.session.post(
+                endpoint, 
+                headers=signed_headers,
+                json=payload
+            )
+            
+            response_time = time.time() - start_time
+            self._log_response(endpoint, response.status_code, response_time)
+            
+        # Handle response
+        if response.status_code != 200:
+            self._handle_error_response(response)
+            
+        data = response.json()
+        browse_nodes_response = GetBrowseNodesResponse.from_dict(data)
+        
+        # Cache response
+        self.cache.set(cache_key, browse_nodes_response)
+        
+        return browse_nodes_response
+    
     async def get_browse_nodes_async(self, request: GetBrowseNodesRequest) -> GetBrowseNodesResponse:
-        """Asynchronous version of get_browse_nodes."""
-        cache_key = f"get_browse_nodes_{'_'.join(request.browse_node_ids)}"
+        """Get browse nodes by IDs asynchronously."""
+        endpoint = f"{self.base_url}/getbrowsenodes"
+        payload = request.to_dict()
+        
+        # Check cache first
+        cache_key = f"get_browse_nodes:{hash(frozenset(payload.items()))}"
         cached_response = self.cache.get(cache_key)
         if cached_response:
-            return GetBrowseNodesResponse.from_dict(cached_response)
-
+            self.logger.debug("Using cached response for GetBrowseNodes (async)")
+            return cached_response
+        
+        # Create session if needed
+        if self.async_session is None:
+            self.async_session = aiohttp.ClientSession()
+        
+        # Make API call
+        self._log_request(endpoint, payload)
         async with self.throttler:
-            payload = request.to_dict()
-            response = await self._make_async_request("getbrowsenodes", payload)
-            self.cache.set(cache_key, response)
-            return GetBrowseNodesResponse.from_dict(response)
+            start_time = time.time()
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip",
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.4"
+            }
+            
+            # Add AWS authentication headers
+            signed_headers = self.signature.sign_request(
+                url=endpoint,
+                method="POST",
+                payload=payload,
+                headers=headers
+            )
+            
+            async with self.async_session.post(
+                endpoint, 
+                headers=signed_headers,
+                json=payload
+            ) as response:
+                response_time = time.time() - start_time
+                self._log_response(endpoint, response.status, response_time)
+                
+                # Handle response
+                if response.status != 200:
+                    text = await response.text()
+                    self._handle_error_response_async(response.status, text)
+                
+                data = await response.json()
+                browse_nodes_response = GetBrowseNodesResponse.from_dict(data)
+                
+                # Cache response
+                self.cache.set(cache_key, browse_nodes_response)
+                
+                return browse_nodes_response
+    
+    def _handle_error_response(self, response):
+        """Handle error responses from the API."""
+        try:
+            error_data = response.json()
+            error_message = error_data.get("Errors", [{}])[0].get("Message", "Unknown error")
+            error_code = error_data.get("Errors", [{}])[0].get("Code", "Unknown")
+        except:
+            error_message = response.text
+            error_code = str(response.status_code)
+        
+        status_code = response.status_code
+        
+        if status_code == 401:
+            raise AuthenticationException(
+                f"Authentication failed: {error_message}",
+                error_code=error_code,
+                status_code=status_code
+            )
+        elif status_code == 429:
+            raise ThrottleException(
+                f"Rate limit exceeded: {error_message}",
+                error_code=error_code,
+                status_code=status_code
+            )
+        elif 400 <= status_code < 500:
+            raise InvalidParameterException(
+                f"Invalid request: {error_message}",
+                error_code=error_code,
+                status_code=status_code
+            )
+        elif status_code >= 500:
+            raise NetworkException(
+                f"Server error: {error_message}",
+                error_code=error_code,
+                status_code=status_code
+            )
+        else:
+            raise AmazonAPIException(
+                f"API error: {error_message}",
+                error_code=error_code,
+                status_code=status_code
+            )
+    
+    def _handle_error_response_async(self, status, text):
+        """Handle error responses from the API for async requests."""
+        try:
+            error_data = json.loads(text)
+            error_message = error_data.get("Errors", [{}])[0].get("Message", "Unknown error")
+            error_code = error_data.get("Errors", [{}])[0].get("Code", "Unknown")
+        except:
+            error_message = text
+            error_code = str(status)
+        
+        if status == 401:
+            raise AuthenticationException(
+                f"Authentication failed: {error_message}",
+                error_code=error_code,
+                status_code=status
+            )
+        elif status == 429:
+            raise ThrottleException(
+                f"Rate limit exceeded: {error_message}",
+                error_code=error_code,
+                status_code=status
+            )
+        elif 400 <= status < 500:
+            raise InvalidParameterException(
+                f"Invalid request: {error_message}",
+                error_code=error_code,
+                status_code=status
+            )
+        elif status >= 500:
+            raise NetworkException(
+                f"Server error: {error_message}",
+                error_code=error_code,
+                status_code=status
+            )
+        else:
+            raise AmazonAPIException(
+                f"API error: {error_message}",
+                error_code=error_code,
+                status_code=status
+            )
 
-    def get_metrics(self) -> Dict:
-        """Get performance metrics."""
-        return {
-            'initialization_time': self._initialize_time,
-            'total_requests': self._request_count,
-            'cache_stats': self.cache.get_stats(),
-            'performance_metrics': performance_monitor.get_metrics(),
-            'performance_summary': performance_monitor.get_performance_summary()
-        }
+    async def close(self):
+        """Close the client and release resources."""
+        if self.async_session:
+            await self.async_session.close()
+            self.async_session = None
+        
+        self.session.close()

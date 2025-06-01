@@ -15,8 +15,8 @@ class Cache:
                  ttl: int = 3600, 
                  maxsize: int = 100, 
                  use_redis: bool = False,
-                 use_file: bool = True,  # Default to file-based cache
-                 base_path: str = "/root",  # Default root path
+                 use_file: bool = True,
+                 base_path: str = None,
                  redis_url: str = "redis://localhost:6379",
                  namespace: str = "amazon_paapi5"):
         """
@@ -27,7 +27,7 @@ class Cache:
             maxsize: Maximum number of items for in-memory cache
             use_redis: Whether to use Redis as cache backend
             use_file: Whether to use file-based cache
-            base_path: Base directory for file cache
+            base_path: Base directory for file cache (default: user's home directory)
             redis_url: Redis connection URL
             namespace: Namespace for cache keys
         """
@@ -36,6 +36,11 @@ class Cache:
         self.use_file = use_file
         self.namespace = namespace
         self.logger = logging.getLogger(__name__)
+        
+        # Use user's home directory if base_path is None
+        if base_path is None:
+            from pathlib import Path
+            base_path = str(Path.home())
         
         # Initialize statistics
         self.stats = {
@@ -96,241 +101,200 @@ class Cache:
         self.stats['last_error'] = str(error)
         self.stats['last_error_time'] = datetime.utcnow().isoformat()
 
-    def get(self, key: str) -> Optional[Any]:
-        """
-        Get value from cache.
+    def get(self, key: str) -> Any:
+        """Get value from cache."""
+        full_key = f"{self.namespace}:{key}"
         
-        Args:
-            key: Cache key to retrieve
-            
-        Returns:
-            Cached value or None if not found
-            
-        Raises:
-            CacheException: If there's an error accessing the cache
-        """
         try:
             if self.use_redis:
-                data = self.redis_client.get(self._make_key(key))
+                data = self.redis_client.get(full_key)
                 if data:
                     self.stats['hits'] += 1
                     return pickle.loads(data)
                 self.stats['misses'] += 1
                 return None
-                
+            
             elif self.use_file:
-                cache_file = self._get_cache_path(key)
-                if not cache_file.exists():
+                cache_path = self._get_cache_path(full_key)
+                
+                if not cache_path.exists():
                     self.stats['misses'] += 1
                     return None
-                    
-                try:
-                    with cache_file.open('rb') as f:
-                        data = pickle.load(f)
-                    
-                    # Check expiration
-                    if data['expires'] < datetime.utcnow().timestamp():
-                        self.delete(key)
-                        self.stats['misses'] += 1
-                        return None
-                    
-                    self.stats['hits'] += 1
-                    return data['value']
-                except Exception:
-                    self.delete(key)
+                
+                # Check if file is expired
+                modified_time = cache_path.stat().st_mtime
+                if (datetime.now().timestamp() - modified_time) > self.ttl:
                     self.stats['misses'] += 1
+                    cache_path.unlink(missing_ok=True)
                     return None
-                    
-            else:
-                value = self.cache.get(key)
-                if value is not None:
+                
+                with cache_path.open('rb') as f:
+                    data = pickle.load(f)
                     self.stats['hits'] += 1
-                else:
-                    self.stats['misses'] += 1
-                return value
+                    return data
+            
+            else:  # In-memory cache
+                if full_key in self.cache:
+                    self.stats['hits'] += 1
+                    return self.cache[full_key]
+                self.stats['misses'] += 1
+                return None
                 
         except Exception as e:
             self._update_error_stats(e)
-            self.logger.error(f"Cache get error: {str(e)}", exc_info=True)
-            raise CacheException(f"Failed to get cache key: {key}", cache_operation="get")
+            self.logger.error(f"Cache get error: {str(e)}")
+            return None
 
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> bool:
-        """
-        Set value in cache.
+    def set(self, key: str, value: Any) -> bool:
+        """Set value in cache."""
+        full_key = f"{self.namespace}:{key}"
         
-        Args:
-            key: Cache key
-            value: Value to cache
-            ttl: Optional custom TTL in seconds
-            
-        Returns:
-            bool: True if successful, False otherwise
-            
-        Raises:
-            CacheException: If there's an error setting the cache
-        """
         try:
-            expiry = datetime.utcnow().timestamp() + (ttl if ttl is not None else self.ttl)
-            
             if self.use_redis:
-                return bool(self.redis_client.setex(
-                    self._make_key(key),
-                    ttl or self.ttl,
-                    pickle.dumps(value)
-                ))
-                
+                serialized = pickle.dumps(value)
+                return bool(self.redis_client.setex(full_key, self.ttl, serialized))
+            
             elif self.use_file:
-                cache_file = self._get_cache_path(key)
-                data = {
-                    'key': key,
-                    'value': value,
-                    'expires': expiry,
-                    'created_at': datetime.utcnow().isoformat()
-                }
+                cache_path = self._get_cache_path(full_key)
                 
-                with cache_file.open('wb') as f:
-                    pickle.dump(data, f)
+                with cache_path.open('wb') as f:
+                    pickle.dump(value, f)
+                    
                 return True
-                
-            else:
-                self.cache[key] = value
+            
+            else:  # In-memory cache
+                self.cache[full_key] = value
                 return True
                 
         except Exception as e:
             self._update_error_stats(e)
-            self.logger.error(f"Cache set error: {str(e)}", exc_info=True)
-            raise CacheException(f"Failed to set cache key: {key}", cache_operation="set")
+            self.logger.error(f"Cache set error: {str(e)}")
+            return False
 
     def delete(self, key: str) -> bool:
-        """
-        Delete a key from cache.
+        """Delete value from cache."""
+        full_key = f"{self.namespace}:{key}"
         
-        Args:
-            key: Cache key to delete
-            
-        Returns:
-            bool: True if deleted, False if not found
-            
-        Raises:
-            CacheException: If there's an error deleting from cache
-        """
         try:
             if self.use_redis:
-                return bool(self.redis_client.delete(self._make_key(key)))
-                
+                return bool(self.redis_client.delete(full_key))
+            
             elif self.use_file:
-                cache_file = self._get_cache_path(key)
-                if cache_file.exists():
-                    cache_file.unlink()
+                cache_path = self._get_cache_path(full_key)
+                if cache_path.exists():
+                    cache_path.unlink()
                 return True
-                
-            else:
-                if key in self.cache:
-                    del self.cache[key]
-                    return True
-                return False
+            
+            else:  # In-memory cache
+                if full_key in self.cache:
+                    del self.cache[full_key]
+                return True
                 
         except Exception as e:
             self._update_error_stats(e)
-            self.logger.error(f"Cache delete error: {str(e)}", exc_info=True)
-            raise CacheException(f"Failed to delete cache key: {key}", cache_operation="delete")
+            self.logger.error(f"Cache delete error: {str(e)}")
+            return False
 
     def clear(self) -> bool:
-        """
-        Clear all cached data.
-        
-        Returns:
-            bool: True if successful
-            
-        Raises:
-            CacheException: If there's an error clearing the cache
-        """
+        """Clear all cached values."""
         try:
             if self.use_redis:
-                pattern = f"{self.namespace}:*"
-                keys = self.redis_client.keys(pattern)
+                keys = self.redis_client.keys(f"{self.namespace}:*")
                 if keys:
                     return bool(self.redis_client.delete(*keys))
                 return True
-                
+            
             elif self.use_file:
-                for cache_file in self.cache_dir.glob("*.cache"):
-                    try:
-                        cache_file.unlink()
-                    except Exception:
-                        continue
+                for path in self.cache_dir.glob("*.cache"):
+                    path.unlink(missing_ok=True)
                 return True
-                
-            else:
+            
+            else:  # In-memory cache
                 self.cache.clear()
                 return True
                 
         except Exception as e:
             self._update_error_stats(e)
-            self.logger.error(f"Cache clear error: {str(e)}", exc_info=True)
-            raise CacheException("Failed to clear cache", cache_operation="clear")
+            self.logger.error(f"Cache clear error: {str(e)}")
+            return False
 
     def get_stats(self) -> dict:
-        """
-        Get cache statistics.
+        """Get cache statistics."""
+        stats = dict(self.stats)
         
-        Returns:
-            dict: Cache statistics including hits, misses, errors, and hit ratio
-        """
-        stats = self.stats.copy()
-        total_requests = stats['hits'] + stats['misses']
-        stats['hit_ratio'] = (
-            stats['hits'] / total_requests
-            if total_requests > 0
-            else 0
-        )
-        stats['total_requests'] = total_requests
+        # Calculate hit ratio
+        total = stats['hits'] + stats['misses']
+        stats['hit_ratio'] = stats['hits'] / total if total > 0 else 0
         
-        if self.use_file:
-            try:
-                cache_files = list(self.cache_dir.glob("*.cache"))
-                total_size = sum(f.stat().st_size for f in cache_files)
-                stats.update({
-                    'cache_dir': str(self.cache_dir),
-                    'file_count': len(cache_files),
-                    'total_size_bytes': total_size,
-                    'total_size_mb': round(total_size / (1024 * 1024), 2)
-                })
-            except Exception:
-                pass
-                
-        return stats
-
-    def _make_key(self, key: str) -> str:
-        """Create namespaced key for Redis."""
-        return f"{self.namespace}:{key}"
-
-    def health_check(self) -> dict:
-        """
-        Check cache health status.
-        
-        Returns:
-            dict: Health check results
-        """
-        status = {
-            'healthy': True,
-            'backend': 'redis' if self.use_redis else 'file' if self.use_file else 'memory',
-            'stats': self.get_stats()
-        }
-        
+        # Add cache type
         if self.use_redis:
-            try:
-                self.redis_client.ping()
-            except redis.RedisError as e:
-                status['healthy'] = False
-                status['error'] = str(e)
+            stats['type'] = 'redis'
         elif self.use_file:
-            try:
-                if not self.cache_dir.exists():
-                    status['healthy'] = False
-                    status['error'] = "Cache directory does not exist"
-            except Exception as e:
-                status['healthy'] = False
-                status['error'] = str(e)
-                
-        return status
+            stats['type'] = 'file'
+            stats['location'] = str(self.cache_dir)
+        else:
+            stats['type'] = 'memory'
+            stats['size'] = len(self.cache) if hasattr(self, 'cache') else 0
+            stats['maxsize'] = self.cache.maxsize if hasattr(self, 'cache') else 0
+            
+        return stats
+    
+    def get_many(self, keys: list) -> dict:
+        """Get multiple values from cache."""
+        result = {}
+        for key in keys:
+            value = self.get(key)
+            if value is not None:
+                result[key] = value
+        return result
+    
+    def set_many(self, items: dict) -> bool:
+        """Set multiple values in cache."""
+        success = True
+        for key, value in items.items():
+            if not self.set(key, value):
+                success = False
+        return success
+    
+    def delete_many(self, keys: list) -> bool:
+        """Delete multiple values from cache."""
+        success = True
+        for key in keys:
+            if not self.delete(key):
+                success = False
+        return success
+    
+    def get_or_set(self, key: str, value_func: callable, ttl: Optional[int] = None) -> Any:
+        """Get value from cache or compute and store it."""
+        value = self.get(key)
+        if value is None:
+            value = value_func()
+            self.set(key, value)
+        return value
+    
+    def touch(self, key: str) -> bool:
+        """Update TTL for key."""
+        value = self.get(key)
+        if value is not None:
+            return self.set(key, value)
+        return False
+    
+    def contains(self, key: str) -> bool:
+        """Check if key exists in cache."""
+        return self.get(key) is not None
+    
+    def incr(self, key: str, delta: int = 1) -> int:
+        """Increment value in cache."""
+        value = self.get(key) or 0
+        value += delta
+        self.set(key, value)
+        return value
+    
+    def decr(self, key: str, delta: int = 1) -> int:
+        """Decrement value in cache."""
+        return self.incr(key, -delta)
+    
+    def close(self) -> None:
+        """Close cache connections."""
+        if self.use_redis and hasattr(self, 'redis_client'):
+            self.redis_client.close()

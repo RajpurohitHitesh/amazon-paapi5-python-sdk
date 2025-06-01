@@ -93,6 +93,94 @@ class PerformanceMonitor:
             'cache_hit_ratio': self.metrics['cache_stats'].get('hit_ratio', 0)
         }
         return summary
+        
+    def clear_metrics(self) -> None:
+        """Clear all collected metrics."""
+        self.metrics = {
+            'function_calls': {},
+            'api_requests': {},
+            'cache_stats': {},
+            'errors': []
+        }
+        
+    def get_errors(self, limit: int = 10) -> list:
+        """Get the most recent errors."""
+        return sorted(
+            self.metrics['errors'],
+            key=lambda x: x['timestamp'],
+            reverse=True
+        )[:limit]
+        
+    def get_slowest_functions(self, limit: int = 5) -> list:
+        """Get the slowest functions."""
+        functions = [
+            {
+                'name': name,
+                'avg_time': stats['avg_time'],
+                'call_count': stats['count']
+            }
+            for name, stats in self.metrics['function_calls'].items()
+        ]
+        return sorted(
+            functions,
+            key=lambda x: x['avg_time'],
+            reverse=True
+        )[:limit]
+        
+    def get_slowest_endpoints(self, limit: int = 5) -> list:
+        """Get the slowest API endpoints."""
+        endpoints = [
+            {
+                'endpoint': endpoint,
+                'avg_time': stats['avg_time'],
+                'call_count': stats['count']
+            }
+            for endpoint, stats in self.metrics['api_requests'].items()
+        ]
+        return sorted(
+            endpoints,
+            key=lambda x: x['avg_time'],
+            reverse=True
+        )[:limit]
+        
+    def export_metrics(self, format: str = 'dict') -> Any:
+        """Export metrics in different formats."""
+        if format == 'dict':
+            return self.metrics
+        elif format == 'json':
+            import json
+            return json.dumps(self.metrics, default=str)
+        elif format == 'csv':
+            import csv
+            import io
+            
+            output = io.StringIO()
+            writer = csv.writer(output)
+            
+            # Write function calls
+            writer.writerow(['Function', 'Count', 'Avg Time', 'Success', 'Failure'])
+            for func, stats in self.metrics['function_calls'].items():
+                writer.writerow([
+                    func,
+                    stats['count'],
+                    stats['avg_time'],
+                    stats['successes'],
+                    stats['failures']
+                ])
+                
+            # Write API requests
+            writer.writerow([''])
+            writer.writerow(['Endpoint', 'Count', 'Avg Time'])
+            for endpoint, stats in self.metrics['api_requests'].items():
+                writer.writerow([
+                    endpoint,
+                    stats['count'],
+                    stats['avg_time']
+                ])
+                
+            return output.getvalue()
+        else:
+            raise ValueError(f"Unsupported format: {format}")
 
 def measure_performance(monitor: Optional[PerformanceMonitor] = None):
     """
@@ -108,33 +196,49 @@ def measure_performance(monitor: Optional[PerformanceMonitor] = None):
             error = None
             try:
                 result = func(*args, **kwargs)
-                success = True
                 return result
             except Exception as e:
                 error = e
-                success = False
                 raise
             finally:
                 execution_time = time.time() - start_time
                 if monitor:
                     monitor.record_function_call(
-                        func.__name__,
-                        execution_time,
-                        success,
-                        error
+                        func_name=func.__name__,
+                        execution_time=execution_time,
+                        success=error is None,
+                        error=error
                     )
-                
-                logger.info(
-                    f"Performance: {func.__name__}",
-                    extra={
-                        'function': func.__name__,
-                        'execution_time': execution_time,
-                        'success': success,
-                        'error': str(error) if error else None
-                    }
-                )
+        
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs) -> Any:
+            start_time = time.time()
+            error = None
+            try:
+                result = await func(*args, **kwargs)
+                return result
+            except Exception as e:
+                error = e
+                raise
+            finally:
+                execution_time = time.time() - start_time
+                if monitor:
+                    monitor.record_function_call(
+                        func_name=func.__name__,
+                        execution_time=execution_time,
+                        success=error is None,
+                        error=error
+                    )
+        
+        # Use appropriate wrapper based on if the function is async
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
         return wrapper
+    
     return decorator
 
-# Global monitor instance
+# Create a singleton instance
 performance_monitor = PerformanceMonitor()
+
+# Add missing import that was causing issues
+import asyncio

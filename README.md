@@ -1,7 +1,7 @@
 # Amazon PA-API 5.0 Python SDK
 
 [![PyPI](https://img.shields.io/pypi/v/amazon-paapi5-python-sdk?color=%231182C2&label=PyPI)](https://pypi.org/project/amazon-paapi5-python-sdk/)
-[![Python](https://img.shields.io/badge/Python->3.8-%23FFD140)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python->3.9-%23FFD140)](https://www.python.org/)
 [![Amazon API](https://img.shields.io/badge/Amazon%20API-5.0-%23FD9B15)](https://webservices.amazon.com/paapi5/documentation/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/amazon-paapi5-python-sdk?label=Installs)](https://pypi.org/project/amazon-paapi5-python-sdk/)
 ![Static Badge](https://img.shields.io/badge/License-Apache_2.0-blue)
@@ -123,7 +123,7 @@ This SDK is packed with features to make your integration with PA-API 5.0 seamle
 
 ## Installation
 
-To use the SDK, you need Python 3.8 or higher. Follow these steps:
+To use the SDK, you need Python 3.9 or higher. Follow these steps:
 
 1. **Install the SDK**:
    ```bash
@@ -142,7 +142,7 @@ To use the SDK, you need Python 3.8 or higher. Follow these steps:
    ```bash
    python -c "import amazon_paapi5; print(amazon_paapi5.__version__)"
    ```
-   It should output `1.0.0`.
+   It should output `1.0.4`.
 
 ## Getting Started
 
@@ -305,7 +305,7 @@ config.set_marketplace("www.amazon.co.uk")  # Updates region to 'eu-west-1' and 
 The SDK is organized into a clear, modular structure. Here’s what each part does:
 
 - **`src/amazon_paapi5/`**: The main library code.
-  - `__init__.py`: Defines the library version (`1.0.0`).
+  - `__init__.py`: Defines the library version (`1.0.4`).
   - `client.py`: The core `Client` class that handles API requests, throttling, caching, and signature generation.
   - `config.py`: Manages configuration (credentials, marketplace, throttling delay) and supports 18 marketplaces.
   - `signature.py`: Generates AWS V4 signatures for secure API authentication.

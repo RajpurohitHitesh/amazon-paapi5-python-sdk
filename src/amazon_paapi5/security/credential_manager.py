@@ -24,10 +24,21 @@ class CredentialManager:
         
         if encryption_key:
             try:
-                # Ensure the key is properly padded and formatted
-                key_bytes = encryption_key.encode('utf-8')
-                key_bytes = key_bytes.ljust(32)[:32]
-                key = base64.urlsafe_b64encode(key_bytes)
+                # Use a more secure key derivation method
+                from cryptography.hazmat.primitives import hashes
+                from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+                
+                # Use fixed salt for deterministic key derivation
+                salt = b'amazon_paapi5_python_sdk'
+                
+                # Derive a proper key from the provided encryption key
+                kdf = PBKDF2HMAC(
+                    algorithm=hashes.SHA256(),
+                    length=32,
+                    salt=salt,
+                    iterations=100000,
+                )
+                key = base64.urlsafe_b64encode(kdf.derive(encryption_key.encode('utf-8')))
                 self.fernet = Fernet(key)
                 self.logger.info("Successfully initialized credential encryption")
             except Exception as e:
@@ -35,7 +46,7 @@ class CredentialManager:
                 raise SecurityException(
                     "Invalid encryption key format",
                     error_type="invalid_key"
-                )
+                ) from e
 
     def encrypt_credentials(self, credentials: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -124,46 +135,46 @@ class CredentialManager:
             credentials: Currently encrypted credentials
             
         Returns:
-            Dictionary with credentials encrypted with new key
+            Dict: Credentials encrypted with the new key
             
         Raises:
-            SecurityException: If key rotation fails
+            SecurityException: If rotation fails
         """
+        if not self.encryption_key:
+            self.encryption_key = new_key
+            self.fernet = Fernet(new_key)
+            return credentials
+            
         try:
-            # Decrypt with old key
+            # First decrypt with old key
             decrypted = self.decrypt_credentials(credentials)
             
-            # Update encryption key
+            # Set up new key
+            old_key = self.encryption_key
             self.encryption_key = new_key
-            key_bytes = new_key.encode('utf-8').ljust(32)[:32]
-            key = base64.urlsafe_b64encode(key_bytes)
+            
+            # Use more secure key derivation as in __init__
+            from cryptography.hazmat.primitives import hashes
+            from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+            
+            salt = b'amazon_paapi5_python_sdk'
+            kdf = PBKDF2HMAC(
+                algorithm=hashes.SHA256(),
+                length=32,
+                salt=salt,
+                iterations=100000,
+            )
+            key = base64.urlsafe_b64encode(kdf.derive(new_key.encode('utf-8')))
+            
             self.fernet = Fernet(key)
             
-            # Encrypt with new key
+            # Re-encrypt with new key
             return self.encrypt_credentials(decrypted)
         except Exception as e:
+            # Restore old key in case of failure
+            self.encryption_key = old_key if 'old_key' in locals() else None
             self.logger.error(f"Key rotation failed: {str(e)}")
             raise SecurityException(
                 "Failed to rotate encryption key",
                 error_type="key_rotation_failed"
             )
-
-    def validate_credentials(self, credentials: Dict[str, Any]) -> bool:
-        """
-        Validate that credentials are properly encrypted.
-        
-        Args:
-            credentials: Dictionary of credentials to validate
-            
-        Returns:
-            bool: True if valid, False otherwise
-        """
-        try:
-            decrypted = self.decrypt_credentials(credentials)
-            return all(
-                isinstance(v, str) and len(v) > 0
-                for v in decrypted.values()
-                if isinstance(v, str)
-            )
-        except Exception:
-            return False

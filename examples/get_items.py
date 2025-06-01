@@ -2,12 +2,24 @@ from amazon_paapi5.client import Client
 from amazon_paapi5.config import Config
 from amazon_paapi5.models.get_items import GetItemsRequest
 
+# Validate credentials
+access_key = "<YOUR_ACCESS_KEY>"
+secret_key = "<YOUR_SECRET_KEY>"
+partner_tag = "<YOUR_PARTNER_TAG>"
+encryption_key = "<YOUR_ENCRYPTION_KEY>"
+
+if any(x.startswith("<") and x.endswith(">") for x in [access_key, secret_key, partner_tag, encryption_key]):
+    print("ERROR: You need to replace the placeholder values in this example file with your actual credentials.")
+    print("Please update the values for access_key, secret_key, partner_tag, and encryption_key.")
+    import sys
+    sys.exit(1)
+
 # Initialize configuration
 config = Config(
-    access_key="<YOUR_ACCESS_KEY>",
-    secret_key="<YOUR_SECRET_KEY>",
-    partner_tag="<YOUR_PARTNER_TAG>",
-    encryption_key="<YOUR_ENCRYPTION_KEY>",
+    access_key=access_key,
+    secret_key=secret_key,
+    partner_tag=partner_tag,
+    encryption_key=encryption_key,
     marketplace="www.amazon.in",
 )
 
