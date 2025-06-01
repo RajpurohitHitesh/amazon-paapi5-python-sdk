@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 from pathlib import Path
 from ..exceptions import CacheException
+import collections
 
 class Cache:
     """Enhanced caching system with file-based, Redis, and in-memory options."""
@@ -32,6 +33,7 @@ class Cache:
             namespace: Namespace for cache keys
         """
         self.ttl = ttl
+        self.maxsize = maxsize
         self.use_redis = use_redis
         self.use_file = use_file
         self.namespace = namespace
@@ -50,6 +52,9 @@ class Cache:
             'last_error': None,
             'last_error_time': None
         }
+        
+        # Initialize key tracker for all cache types
+        self.key_tracker = collections.OrderedDict()
         
         # Try Redis if specified
         if use_redis:
@@ -80,7 +85,6 @@ class Cache:
                         f.write('*\n!.gitignore\n')
                         
                 self.logger.info(f"Using file-based cache in {self.cache_dir}")
-                return
             except Exception as e:
                 self.logger.warning(f"File cache initialization failed: {e}. Falling back to memory cache.")
                 self.use_file = False
@@ -89,6 +93,17 @@ class Cache:
         if not (self.use_redis or self.use_file):
             self.cache = TTLCache(maxsize=maxsize, ttl=ttl)
             self.logger.info(f"Using in-memory cache with maxsize={maxsize}")
+    
+    def _enforce_maxsize(self, new_key=None):
+        """Enforce maxsize by removing oldest items if needed."""
+        if new_key is not None:
+            self.key_tracker[new_key] = datetime.now().timestamp()
+            
+        # If we've exceeded maxsize, remove oldest item(s)
+        while len(self.key_tracker) > self.maxsize:
+            oldest_key = next(iter(self.key_tracker))
+            self.delete(oldest_key.split(':', 1)[1])  # Remove namespace prefix
+            self.key_tracker.pop(oldest_key)
 
     def _get_cache_path(self, key: str) -> Path:
         """Generate cache file path for given key."""
@@ -109,6 +124,7 @@ class Cache:
             if self.use_redis:
                 data = self.redis_client.get(full_key)
                 if data:
+                    self.key_tracker[full_key] = datetime.now().timestamp()
                     self.stats['hits'] += 1
                     return pickle.loads(data)
                 self.stats['misses'] += 1
@@ -126,10 +142,13 @@ class Cache:
                 if (datetime.now().timestamp() - modified_time) > self.ttl:
                     self.stats['misses'] += 1
                     cache_path.unlink(missing_ok=True)
+                    if full_key in self.key_tracker:
+                        self.key_tracker.pop(full_key)
                     return None
                 
                 with cache_path.open('rb') as f:
                     data = pickle.load(f)
+                    self.key_tracker[full_key] = datetime.now().timestamp()
                     self.stats['hits'] += 1
                     return data
             
@@ -152,9 +171,12 @@ class Cache:
         try:
             if self.use_redis:
                 serialized = pickle.dumps(value)
-                return bool(self.redis_client.setex(full_key, self.ttl, serialized))
+                result = bool(self.redis_client.setex(full_key, self.ttl, serialized))
+                self._enforce_maxsize(full_key)
+                return result
             
             elif self.use_file:
+                self._enforce_maxsize(full_key)
                 cache_path = self._get_cache_path(full_key)
                 
                 with cache_path.open('wb') as f:
@@ -176,6 +198,9 @@ class Cache:
         full_key = f"{self.namespace}:{key}"
         
         try:
+            if full_key in self.key_tracker:
+                self.key_tracker.pop(full_key)
+                
             if self.use_redis:
                 return bool(self.redis_client.delete(full_key))
             
@@ -198,6 +223,8 @@ class Cache:
     def clear(self) -> bool:
         """Clear all cached values."""
         try:
+            self.key_tracker.clear()
+            
             if self.use_redis:
                 keys = self.redis_client.keys(f"{self.namespace}:*")
                 if keys:
