@@ -1,0 +1,35 @@
+[tool.poetry]
+name = "amazon-paapi5-python-sdk"
+version = "1.0.3"
+description = "Amazon Product Advertising API v5 Python SDK (Most Advance SDK)"
+authors = ["Hitesh Rajpurohit"]
+readme = "README.md"
+packages = [
+    {include = "amazon_paapi5", from = "src"}
+]
+
+[tool.poetry.dependencies]
+python = ">= 3.9"
+requests = ">= 2.31.0"
+aiohttp = ">= 3.9.3"
+cachetools = ">= 5.3.3"
+redis = {version = ">= 5.0.3", optional = true}
+cryptography = ">= 42.0.5"
+
+[tool.poetry.extras]
+redis = ["redis"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">= 8.0.0"
+pytest-asyncio = ">= 0.23.5"
+pytest-cov = ">= 4.1.0"
+black = ">= 24.1.1"
+isort = ">= 5.13.2"
+flake8 = ">= 7.0.0"
+mypy = ">= 1.8.0"
+types-requests = ">= 2.31.0"
+types-redis = ">= 4.6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
