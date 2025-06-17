@@ -4,6 +4,7 @@ from typing import Any, Optional, Dict
 import requests
 import aiohttp
 import json
+import hashlib
 from datetime import datetime, timezone
 import logging
 from .config import Config
@@ -94,6 +95,23 @@ class Client:
             f"Initialized Amazon PAAPI client for marketplace: {config.marketplace}"
         )
 
+    def _create_cache_key(self, operation: str, payload: dict) -> str:
+        """
+        Create a cache key from the operation and payload.
+        Handles unhashable types like lists by converting them to hashable equivalents.
+        """
+        try:
+            # Use JSON serialization with sorted keys for consistent hash generation
+            payload_str = json.dumps(payload, sort_keys=True)
+            payload_hash = hashlib.md5(payload_str.encode()).hexdigest()
+            return f"{operation}:{payload_hash}"
+        except (TypeError, ValueError) as e:
+            # Fallback to string representation if JSON serialization fails
+            self.logger.warning(f"Failed to serialize payload for cache key: {e}")
+            payload_str = str(sorted(payload.items()))
+            payload_hash = hashlib.md5(payload_str.encode()).hexdigest()
+            return f"{operation}:{payload_hash}"
+
     def _log_request(self, endpoint: str, payload: dict) -> None:
         """Log request details."""
         self._request_count += 1
@@ -133,7 +151,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"search_items:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("search_items", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for SearchItems")
@@ -186,7 +204,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"search_items:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("search_items", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for SearchItems (async)")
@@ -244,7 +262,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"get_items:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("get_items", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for GetItems")
@@ -297,7 +315,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"get_items:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("get_items", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for GetItems (async)")
@@ -355,7 +373,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"get_variations:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("get_variations", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for GetVariations")
@@ -408,7 +426,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"get_variations:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("get_variations", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for GetVariations (async)")
@@ -466,7 +484,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"get_browse_nodes:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("get_browse_nodes", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for GetBrowseNodes")
@@ -519,7 +537,7 @@ class Client:
         payload = request.to_dict()
         
         # Check cache first
-        cache_key = f"get_browse_nodes:{hash(frozenset(payload.items()))}"
+        cache_key = self._create_cache_key("get_browse_nodes", payload)
         cached_response = self.cache.get(cache_key)
         if cached_response:
             self.logger.debug("Using cached response for GetBrowseNodes (async)")
