@@ -59,6 +59,22 @@ class SearchItemsResource(object):
     OFFERS_SUMMARIES_LOWESTPRICE = "Offers.Summaries.LowestPrice"
     OFFERS_SUMMARIES_OFFERCOUNT = "Offers.Summaries.OfferCount"
     PARENTASIN = "ParentASIN"
+    # Added missing RentalOffers fields
+    RENTALOFFERS_LISTINGS_AVAILABILITY_MAXORDERQUANTITY = "RentalOffers.Listings.Availability.MaxOrderQuantity"
+    RENTALOFFERS_LISTINGS_AVAILABILITY_MESSAGE = "RentalOffers.Listings.Availability.Message"
+    RENTALOFFERS_LISTINGS_AVAILABILITY_MINORDERQUANTITY = "RentalOffers.Listings.Availability.MinOrderQuantity"
+    RENTALOFFERS_LISTINGS_AVAILABILITY_TYPE = "RentalOffers.Listings.Availability.Type"
+    RENTALOFFERS_LISTINGS_BASEPRICE = "RentalOffers.Listings.BasePrice"
+    RENTALOFFERS_LISTINGS_CONDITION = "RentalOffers.Listings.Condition"
+    RENTALOFFERS_LISTINGS_CONDITION_CONDITIONNOTE = "RentalOffers.Listings.Condition.ConditionNote"
+    RENTALOFFERS_LISTINGS_CONDITION_SUBCONDITION = "RentalOffers.Listings.Condition.SubCondition"
+    RENTALOFFERS_LISTINGS_DELIVERYINFO_ISAMAZONFULFILLED = "RentalOffers.Listings.DeliveryInfo.IsAmazonFulfilled"
+    RENTALOFFERS_LISTINGS_DELIVERYINFO_ISFREESHIPPINGELIGIBLE = "RentalOffers.Listings.DeliveryInfo.IsFreeShippingEligible"
+    RENTALOFFERS_LISTINGS_DELIVERYINFO_ISPRIMEELIGIBLE = "RentalOffers.Listings.DeliveryInfo.IsPrimeEligible"
+    RENTALOFFERS_LISTINGS_DELIVERYINFO_SHIPPINGCHARGES = "RentalOffers.Listings.DeliveryInfo.ShippingCharges"
+    RENTALOFFERS_LISTINGS_MERCHANTINFO = "RentalOffers.Listings.MerchantInfo"
+    # Added SearchRefinements field
+    SEARCHREFINEMENTS = "SearchRefinements"
 
 
 class GetItemsResource(object):
