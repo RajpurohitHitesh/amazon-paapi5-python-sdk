@@ -44,7 +44,6 @@ Dynamic: summary
 [![Python application](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-app.yml/badge.svg)](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-app.yml)
 [![Python Package using Conda](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-package-conda.yml)
 [![Python package](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-package.yml/badge.svg)](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-package.yml)
-[![Publish to PyPI](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-publish.yml/badge.svg)](https://github.com/RajpurohitHitesh/amazon-paapi5-python-sdk/actions/workflows/python-publish.yml)
 
 Welcome to the **Amazon PA-API 5.0 Python SDK**, a lightweight and powerful library designed to help developers interact with Amazon’s Product Advertising API (PA-API) 5.0. This SDK makes it easy to fetch product details, search for items, retrieve variations, and explore browse nodes on Amazon’s marketplace, all while handling complex tasks like authentication, rate limiting, and caching for you. Whether you’re a beginner or an experienced coder, this guide will walk you through everything you need to know to use this library effectively.
 

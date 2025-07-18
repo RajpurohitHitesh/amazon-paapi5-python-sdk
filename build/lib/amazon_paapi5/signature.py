@@ -39,3 +39,19 @@ class Signature:
             f"SignedHeaders=host, Signature={signature}"
         )
         return authorization
+
+    def sign_request(self, url: str, method: str, payload: dict, headers: dict) -> dict:
+        """Sign the request and return headers with authorization."""
+        # Parse URL to get host and path
+        parsed_url = urllib.parse.urlparse(url)
+        host = parsed_url.netloc
+        path = parsed_url.path if parsed_url.path else '/'
+        
+        # Generate authorization header using existing generate method
+        authorization = self.generate(method, host, path, payload)
+        
+        # Add authorization to headers (create copy to avoid modifying original)
+        signed_headers = headers.copy()
+        signed_headers['Authorization'] = authorization
+        
+        return signed_headers

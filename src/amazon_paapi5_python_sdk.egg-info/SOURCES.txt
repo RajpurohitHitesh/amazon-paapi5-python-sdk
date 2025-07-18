@@ -8,6 +8,7 @@ src/amazon_paapi5/client.py
 src/amazon_paapi5/config.py
 src/amazon_paapi5/exceptions.py
 src/amazon_paapi5/monitoring.py
+src/amazon_paapi5/resource_constants.py
 src/amazon_paapi5/resources.py
 src/amazon_paapi5/signature.py
 src/amazon_paapi5/models/__init__.py
