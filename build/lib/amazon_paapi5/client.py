@@ -138,7 +138,7 @@ class Client:
                 "Authorization": authorization,
                 "x-amz-date": datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
                 "Accept-Encoding": "gzip",
-                "User-Agent": f"AmazonPAAPI5-Python-SDK/1.0.4 (Language=Python/{'.'.join(map(str, __import__('sys').version_info[:3]))})"
+                "User-Agent": f"AmazonPAAPI5-Python-SDK/1.0.5 (Language=Python/{'.'.join(map(str, __import__('sys').version_info[:3]))})"
             }
             
             response = self.session.post(
@@ -210,7 +210,7 @@ class Client:
                 "Authorization": authorization,
                 "x-amz-date": datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ'),
                 "Accept-Encoding": "gzip",
-                "User-Agent": f"AmazonPAAPI5-Python-SDK/1.0.4 (Async)"
+                "User-Agent": f"AmazonPAAPI5-Python-SDK/1.0.5 (Async)"
             }
             
             async with self.async_session.post(

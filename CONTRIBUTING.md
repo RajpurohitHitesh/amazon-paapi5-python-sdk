@@ -91,7 +91,7 @@ If all tests pass, you’re ready to start coding!
 The project is organized to be easy to navigate. Here’s what each part does:
 
 - **`src/amazon_paapi5/`**: The main library code.
-  - `__init__.py`: Sets the library version (`1.0.4`).
+  - `__init__.py`: Sets the library version (`1.0.5`).
   - `client.py`: The `Client` class that makes API calls, handles throttling, caching, and authentication.
   - `config.py`: Stores configuration (credentials, marketplace, etc.) and supports 18 Amazon marketplaces.
   - `signature.py`: Generates AWS V4 signatures for secure API requests.
