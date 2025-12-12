@@ -166,7 +166,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers
@@ -223,7 +223,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers
@@ -277,7 +277,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers
@@ -334,7 +334,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers
@@ -388,7 +388,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers
@@ -445,7 +445,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers
@@ -499,7 +499,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers
@@ -556,7 +556,7 @@ class Client:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "Accept-Encoding": "gzip",
-                "User-Agent": "amazon-paapi5-python-sdk/1.0.5"
+                "User-Agent": "amazon-paapi5-python-sdk/1.0.6"
             }
             
             # Add AWS authentication headers

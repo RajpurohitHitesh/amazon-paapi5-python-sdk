@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: amazon-paapi5-python-sdk
-Version: 1.0.5
+Version: 1.0.6
 Summary: Amazon Product Advertising API v5 Python SDK (Most Advance SDK)
 Home-page: https://github.com/rajpurohithitesh/amazon-paapi5-python-sdk
 Author: Hitesh Rajpurohit
@@ -175,7 +175,7 @@ To use the SDK, you need Python 3.9 or higher. Follow these steps:
    ```bash
    python -c "import amazon_paapi5; print(amazon_paapi5.__version__)"
    ```
-   It should output `1.0.5`.
+   It should output `1.0.6`.
 
 ## Getting Started
 
@@ -338,7 +338,7 @@ config.set_marketplace("www.amazon.co.uk")  # Updates region to 'eu-west-1' and 
 The SDK is organized into a clear, modular structure. Here’s what each part does:
 
 - **`src/amazon_paapi5/`**: The main library code.
-  - `__init__.py`: Defines the library version (`1.0.5`).
+  - `__init__.py`: Defines the library version (`1.0.6`).
   - `client.py`: The core `Client` class that handles API requests, throttling, caching, and signature generation.
   - `config.py`: Manages configuration (credentials, marketplace, throttling delay) and supports 18 marketplaces.
   - `signature.py`: Generates AWS V4 signatures for secure API authentication.

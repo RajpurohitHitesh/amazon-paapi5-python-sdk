@@ -1,6 +1,7 @@
 from typing import List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from ..resources import validate_resources
+from .offersv2 import OffersV2
 
 @dataclass
 class SearchItemsRequest:
@@ -32,6 +33,20 @@ class Item:
     title: Optional[str] = None
     price: Optional[float] = None
     detail_page_url: Optional[str] = None
+    raw_data: dict = field(default_factory=dict, repr=False)
+    offersv2: Optional[OffersV2] = None
+
+    @classmethod
+    def from_dict(cls, item_data: dict) -> 'Item':
+        """Create Item instance from API response dict with full OffersV2 support"""
+        return cls(
+            asin=item_data.get("ASIN", ""),
+            title=item_data.get("ItemInfo", {}).get("Title", {}).get("DisplayValue"),
+            price=item_data.get("Offers", {}).get("Listings", [{}])[0].get("Price", {}).get("Amount"),
+            detail_page_url=item_data.get("DetailPageURL"),
+            raw_data=item_data,
+            offersv2=OffersV2.from_dict(item_data.get("OffersV2"))
+        )
 
 @dataclass
 class SearchItemsResponse:
@@ -40,12 +55,7 @@ class SearchItemsResponse:
     @classmethod
     def from_dict(cls, data: dict) -> 'SearchItemsResponse':
         items = [
-            Item(
-                asin=item["ASIN"],
-                title=item.get("ItemInfo", {}).get("Title", {}).get("DisplayValue"),
-                price=item.get("Offers", {}).get("Listings", [{}])[0].get("Price", {}).get("Amount"),
-                detail_page_url=item.get("DetailPageURL"),
-            )
+            Item.from_dict(item)
             for item in data.get("SearchResult", {}).get("Items", [])
         ]
         return cls(items=items)
