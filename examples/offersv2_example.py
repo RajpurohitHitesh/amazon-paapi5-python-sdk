@@ -13,6 +13,99 @@ from amazon_paapi5.client import Client
 from amazon_paapi5.config import Config
 from amazon_paapi5.models.get_items import GetItemsRequest
 
+
+def display_offer_listing(listing):
+    """Helper function to display offer listing details"""
+    
+    # Price information
+    if listing.price:
+        price = listing.price
+        if price.money:
+            print(f"  Price: {price.money.display_amount} ({price.money.currency})")
+        
+        # Savings
+        if price.savings:
+            savings = price.savings
+            if savings.money:
+                print(f"  Save: {savings.money.display_amount}", end="")
+            if savings.percentage:
+                print(f" ({savings.percentage}%)")
+            else:
+                print()
+        
+        # Original price (Saving Basis)
+        if price.saving_basis:
+            basis = price.saving_basis
+            if basis.money:
+                label = basis.saving_basis_type_label or "Was"
+                print(f"  {label}: {basis.money.display_amount}")
+        
+        # Price per unit
+        if price.price_per_unit:
+            print(f"  Unit Price: {price.price_per_unit.display_amount}")
+    
+    # Availability
+    if listing.availability:
+        avail = listing.availability
+        print(f"  Availability: {avail.type}")
+        if avail.message:
+            print(f"  Status: {avail.message}")
+        if avail.min_order_quantity:
+            print(f"  Min Order: {avail.min_order_quantity}")
+        if avail.max_order_quantity:
+            print(f"  Max Order: {avail.max_order_quantity}")
+    
+    # Condition
+    if listing.condition:
+        cond = listing.condition
+        print(f"  Condition: {cond.value}")
+        if cond.sub_condition and cond.sub_condition != "Unknown":
+            print(f"  Sub-Condition: {cond.sub_condition}")
+        if cond.condition_note:
+            print(f"  Note: {cond.condition_note}")
+    
+    # Merchant
+    if listing.merchant_info:
+        merchant = listing.merchant_info
+        print(f"  Merchant: {merchant.name}")
+        if merchant.id:
+            print(f"  Merchant ID: {merchant.id}")
+    
+    # Deal Details
+    if listing.deal_details:
+        deal = listing.deal_details
+        print(f"\n  ** DEAL INFORMATION **")
+        if deal.badge:
+            print(f"  Badge: {deal.badge}")
+        if deal.access_type:
+            print(f"  Access: {deal.access_type}")
+        if deal.start_time:
+            print(f"  Starts: {deal.start_time}")
+        if deal.end_time:
+            print(f"  Ends: {deal.end_time}")
+        if deal.percent_claimed:
+            print(f"  Claimed: {deal.percent_claimed}%")
+        if deal.early_access_duration_in_milliseconds:
+            minutes = deal.early_access_duration_in_milliseconds // 60000
+            print(f"  Early Access: {minutes} minutes")
+    
+    # BuyBox Winner
+    if listing.is_buy_box_winner:
+        print(f"  ✓ BuyBox Winner")
+    
+    # Listing Type
+    if listing.type:
+        print(f"  Type: {listing.type}")
+    
+    # MAP violation
+    if listing.violates_map:
+        print(f"  ⚠ Violates MAP")
+    
+    # Loyalty Points (Japan only)
+    if listing.loyalty_points and listing.loyalty_points.points:
+        print(f"  Loyalty Points: {listing.loyalty_points.points}")
+
+
 # Configure your API credentials
 config = Config(
     access_key='YOUR_ACCESS_KEY',
@@ -108,98 +201,6 @@ try:
 
 except Exception as e:
     print(f"Error: {e}")
-
-
-def display_offer_listing(listing):
-    """Helper function to display offer listing details"""
-    
-    # Price information
-    if listing.price:
-        price = listing.price
-        if price.money:
-            print(f"  Price: {price.money.display_amount} ({price.money.currency})")
-        
-        # Savings
-        if price.savings:
-            savings = price.savings
-            if savings.money:
-                print(f"  Save: {savings.money.display_amount}", end="")
-            if savings.percentage:
-                print(f" ({savings.percentage}%)")
-            else:
-                print()
-        
-        # Original price (Saving Basis)
-        if price.saving_basis:
-            basis = price.saving_basis
-            if basis.money:
-                label = basis.saving_basis_type_label or "Was"
-                print(f"  {label}: {basis.money.display_amount}")
-        
-        # Price per unit
-        if price.price_per_unit:
-            print(f"  Unit Price: {price.price_per_unit.display_amount}")
-    
-    # Availability
-    if listing.availability:
-        avail = listing.availability
-        print(f"  Availability: {avail.type}")
-        if avail.message:
-            print(f"  Status: {avail.message}")
-        if avail.min_order_quantity:
-            print(f"  Min Order: {avail.min_order_quantity}")
-        if avail.max_order_quantity:
-            print(f"  Max Order: {avail.max_order_quantity}")
-    
-    # Condition
-    if listing.condition:
-        cond = listing.condition
-        print(f"  Condition: {cond.value}")
-        if cond.sub_condition and cond.sub_condition != "Unknown":
-            print(f"  Sub-Condition: {cond.sub_condition}")
-        if cond.condition_note:
-            print(f"  Note: {cond.condition_note}")
-    
-    # Merchant
-    if listing.merchant_info:
-        merchant = listing.merchant_info
-        print(f"  Merchant: {merchant.name}")
-        if merchant.id:
-            print(f"  Merchant ID: {merchant.id}")
-    
-    # Deal Details
-    if listing.deal_details:
-        deal = listing.deal_details
-        print(f"\n  ** DEAL INFORMATION **")
-        if deal.badge:
-            print(f"  Badge: {deal.badge}")
-        if deal.access_type:
-            print(f"  Access: {deal.access_type}")
-        if deal.start_time:
-            print(f"  Starts: {deal.start_time}")
-        if deal.end_time:
-            print(f"  Ends: {deal.end_time}")
-        if deal.percent_claimed:
-            print(f"  Claimed: {deal.percent_claimed}%")
-        if deal.early_access_duration_in_milliseconds:
-            minutes = deal.early_access_duration_in_milliseconds // 60000
-            print(f"  Early Access: {minutes} minutes")
-    
-    # BuyBox Winner
-    if listing.is_buy_box_winner:
-        print(f"  ✓ BuyBox Winner")
-    
-    # Listing Type
-    if listing.type:
-        print(f"  Type: {listing.type}")
-    
-    # MAP violation
-    if listing.violates_map:
-        print(f"  ⚠ Violates MAP")
-    
-    # Loyalty Points (Japan only)
-    if listing.loyalty_points and listing.loyalty_points.points:
-        print(f"  Loyalty Points: {listing.loyalty_points.points}")
 
 
 if __name__ == "__main__":
