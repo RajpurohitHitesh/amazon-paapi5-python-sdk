@@ -15,9 +15,11 @@ class AuthenticationException(AmazonAPIException):
 
 class ThrottleException(AmazonAPIException):
     """Raised when the API rate limit is exceeded."""
-    def __init__(self, message="Rate limit exceeded. Try increasing throttle_delay.", response_errors=None):
+    def __init__(self, message="Rate limit exceeded. Try increasing throttle_delay.", response_errors=None, error_code=None, status_code=None):
         super().__init__(message, response_errors)
         self.retry_after = None  # Can be set when server provides retry-after header
+        self.error_code = error_code
+        self.status_code = status_code
 
     def set_retry_after(self, seconds: int) -> None:
         """Set the recommended retry delay."""
@@ -25,9 +27,11 @@ class ThrottleException(AmazonAPIException):
 
 class InvalidParameterException(AmazonAPIException):
     """Raised when invalid parameters are provided."""
-    def __init__(self, message="Invalid request parameters provided.", response_errors=None, invalid_params=None):
+    def __init__(self, message="Invalid request parameters provided.", response_errors=None, invalid_params=None, error_code=None, status_code=None):
         super().__init__(message, response_errors)
         self.invalid_params = invalid_params or []
+        self.error_code = error_code
+        self.status_code = status_code
 
 class ResourceValidationException(AmazonAPIException):
     """Raised when invalid resources are specified."""
@@ -49,9 +53,11 @@ class SecurityException(AmazonAPIException):
 
 class NetworkException(AmazonAPIException):
     """Raised for network-related issues."""
-    def __init__(self, message="Network error occurred.", original_error=None):
+    def __init__(self, message="Network error occurred.", original_error=None, error_code=None, status_code=None):
         super().__init__(message)
         self.original_error = original_error
+        self.error_code = error_code
+        self.status_code = status_code
 
 class CacheException(AmazonAPIException):
     """Raised for caching-related issues."""
